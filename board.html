@@ -15,21 +15,33 @@
   #err { display:none; padding:20px; margin:16px; background:#FBEEE9; border:1px solid #E0B4A8; border-radius:12px; color:#9A3A2B; font-family:-apple-system,system-ui,monospace; font-size:13px; white-space:pre-wrap; word-break:break-word; line-height:1.5; }
 </style>
 <script>
-  // 화면에 오류를 표시 (빈 화면 방지 + 원인 파악용)
   function showErr(msg) {
-    var e = document.getElementById("err");
-    if (!e) return;
+    var e = document.getElementById("err"); if (!e) return;
     e.style.display = "block";
     e.textContent = "문제가 발생했어요. 아래 내용을 캡처해서 보여주세요:\n\n" + msg;
-    var b = document.getElementById("boot");
-    if (b) b.style.display = "none";
+    var b = document.getElementById("boot"); if (b) b.style.display = "none";
   }
-  window.addEventListener("error", function (ev) {
-    showErr((ev.message || "오류") + (ev.filename ? "\n" + ev.filename + ":" + ev.lineno : ""));
-  });
-  window.addEventListener("unhandledrejection", function (ev) {
-    showErr("Promise 오류: " + (ev.reason && ev.reason.message ? ev.reason.message : ev.reason));
-  });
+  window.addEventListener("error", function (ev) { showErr((ev.message || "오류") + (ev.filename ? "\n" + ev.filename + ":" + ev.lineno : "")); });
+  window.addEventListener("unhandledrejection", function (ev) { showErr("Promise 오류: " + (ev.reason && ev.reason.message ? ev.reason.message : ev.reason)); });
+</script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+<script>
+  // ===== Firebase 설정 =====
+  // ⚠️ databaseURL은 Realtime Database 페이지 맨 위 주소와 같아야 해요. 다르면 이 줄만 교체하세요.
+  var firebaseConfig = {
+    apiKey: "AIzaSyBZlyyD7T5FI6sGF0vSmuM4QmtoG77KNvs",
+    authDomain: "grains-cookies-order.firebaseapp.com",
+    databaseURL: "https://grains-cookies-order-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "grains-cookies-order",
+    storageBucket: "grains-cookies-order.firebasestorage.app",
+    messagingSenderId: "613602106224",
+    appId: "1:613602106224:web:c1842cad52458e67bf4db5"
+  };
+  try {
+    firebase.initializeApp(firebaseConfig);
+    window.__db = firebase.database();
+  } catch (e) { console.error("Firebase init 실패:", e); }
 </script>
 <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
@@ -40,11 +52,11 @@
 <div id="err"></div>
 <script type="text/babel" data-presets="env,react">
 try {
-const { useState, useMemo, useRef } = React;
+const { useState, useMemo, useRef, useEffect } = React;
 
 const SHOP = "그래인스 쿠키";
 
-// 패키지 (랜덤 테스트 주문 생성용)
+// 패키지 (테스트 주문 생성용)
 const PKGS = [
   { name: "종이봉투", cap: 15, price: 9000 },
   { name: "원형 틴", cap: 6, price: 17000 },
@@ -53,18 +65,16 @@ const PKGS = [
 const COOKIES = [
   "초코칩청크쿠키", "곰돌이초코쿠키", "녹차랑그드샤", "딸기타르트쿠키", "제주감귤쿠키",
   "피넛버터쿠키", "크림치즈쿠키", "검은깨쿠키", "코코넛아몬드쿠키", "한라부쿠키",
-  "커피아몬드쿠키", "단호박쿠키", "초코큐브쿠키", "콤비쿠키", "블루베리타르트쿠키",
 ];
 
-// 3단계: 신규 → 준비중 → 준비완료
 const STATUS_NEXT = { 신규: "준비중", 준비중: "준비완료", 준비완료: null };
 const NEXT_LABEL = { 신규: "준비 시작", 준비중: "준비 완료" };
 
-const now = () => {
-  const d = new Date();
+const fmtTime = (ts) => {
+  const d = new Date(ts || Date.now());
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
-const won = (n) => n.toLocaleString("ko-KR") + "원";
+const won = (n) => (n || 0).toLocaleString("ko-KR") + "원";
 
 function randomOrder(no) {
   const pk = PKGS[Math.floor(Math.random() * PKGS.length)];
@@ -74,24 +84,19 @@ function randomOrder(no) {
     picks[c] = (picks[c] || 0) + 1;
   }
   return {
-    no, time: now(), pkg: pk.name, price: pk.price,
+    no, ts: Date.now(), pkg: pk.name, price: pk.price,
     memo: Math.random() > 0.7 ? "견과류 알레르기 있어요" : "",
     items: Object.entries(picks).map(([name, n]) => ({ name, n })),
     status: "신규",
   };
 }
 
-const SEED = [
-  { no: 17, time: "13:24", pkg: "원형 틴", price: 17000, memo: "", status: "신규",
-    items: [{ name: "초코칩청크쿠키", n: 2 }, { name: "제주감귤쿠키", n: 1 }, { name: "녹차랑그드샤", n: 1 }, { name: "크림치즈쿠키", n: 2 }] },
-  { no: 16, time: "13:19", pkg: "사각 틴", price: 23000, memo: "견과류 알레르기 있어요", status: "준비중",
-    items: [{ name: "피넛버터쿠키", n: 3 }, { name: "곰돌이초코쿠키", n: 2 }, { name: "단호박쿠키", n: 4 }] },
-];
-
 function App() {
-  const [orders, setOrders] = useState(SEED);
+  const [orders, setOrders] = useState([]);
   const [filter, setFilter] = useState("진행중");
-  const noRef = useRef(18);
+  const [ready, setReady] = useState(false);
+  const seen = useRef(new Set());
+  const firstLoad = useRef(true);
 
   const beep = () => {
     try {
@@ -106,17 +111,38 @@ function App() {
     } catch (e) {}
   };
 
-  const addTest = () => {
-    setOrders((arr) => [randomOrder(noRef.current++), ...arr]);
-    beep();
+  useEffect(() => {
+    const db = window.__db;
+    if (!db) return;
+    const ref = db.ref("orders");
+    const cb = ref.on("value", (snap) => {
+      const val = snap.val() || {};
+      const list = Object.entries(val).map(([key, o]) => ({ key, ...o }));
+      list.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+      let isNew = false;
+      list.forEach((o) => {
+        if (!seen.current.has(o.key)) { if (!firstLoad.current) isNew = true; seen.current.add(o.key); }
+      });
+      setOrders(list);
+      setReady(true);
+      if (isNew) beep();
+      firstLoad.current = false;
+    });
+    return () => ref.off("value", cb);
+  }, []);
+
+  const addTest = async () => {
+    try {
+      const res = await window.__db.ref("counter").transaction((c) => (c || 0) + 1);
+      await window.__db.ref("orders").push(randomOrder(res.snapshot.val()));
+    } catch (e) {}
   };
-  const advance = (no) =>
-    setOrders((arr) => arr.map((o) => (o.no === no ? { ...o, status: STATUS_NEXT[o.status] || o.status } : o)));
-  const clear = (no) => setOrders((arr) => arr.filter((o) => o.no !== no));
+  const advance = (key, status) => { window.__db.ref("orders/" + key + "/status").set(STATUS_NEXT[status]); };
+  const clear = (key) => { window.__db.ref("orders/" + key).remove(); };
 
   const counts = useMemo(() => {
     const c = { 진행중: 0, 신규: 0, 준비중: 0, 준비완료: 0 };
-    orders.forEach((o) => { c[o.status] += 1; if (o.status !== "준비완료") c.진행중 += 1; });
+    orders.forEach((o) => { c[o.status] = (c[o.status] || 0) + 1; if (o.status !== "준비완료") c.진행중 += 1; });
     return c;
   }, [orders]);
 
@@ -145,11 +171,13 @@ function App() {
       </div>
 
       <main className="list">
-        {shown.length === 0 ? (
+        {!ready ? (
+          <div className="empty">현황판을 불러오는 중…</div>
+        ) : shown.length === 0 ? (
           <div className="empty">표시할 주문이 없어요.</div>
         ) : (
           shown.map((o) => (
-            <div key={o.no} className={"order s-" + o.status}>
+            <div key={o.key} className={"order s-" + o.status}>
               <div className="oTop">
                 <div className="oNoWrap">
                   <span className="oNoLabel">주문번호</span>
@@ -157,14 +185,14 @@ function App() {
                 </div>
                 <div className="oMeta">
                   <span className={"chip c-" + o.status}>{o.status}</span>
-                  <span className="oTime">{o.time}</span>
+                  <span className="oTime">{fmtTime(o.ts)}</span>
                 </div>
               </div>
 
               <div className="oPkg">{o.pkg} · {won(o.price)}</div>
 
               <div className="oItems">
-                {o.items.map((x, i) => (
+                {(o.items || []).map((x, i) => (
                   <span key={i} className="iTag">{x.name}{x.n > 1 ? ` ×${x.n}` : ""}</span>
                 ))}
               </div>
@@ -173,9 +201,9 @@ function App() {
 
               <div className="oFoot">
                 {STATUS_NEXT[o.status] ? (
-                  <button className="adv" onClick={() => advance(o.no)}>{NEXT_LABEL[o.status]}</button>
+                  <button className="adv" onClick={() => advance(o.key, o.status)}>{NEXT_LABEL[o.status]}</button>
                 ) : (
-                  <button className="clearBtn" onClick={() => clear(o.no)}>수령 완료 · 지우기</button>
+                  <button className="clearBtn" onClick={() => clear(o.key)}>수령 완료 · 지우기</button>
                 )}
               </div>
             </div>
@@ -183,8 +211,8 @@ function App() {
         )}
       </main>
 
-      <button className="testBtn" onClick={addTest}>＋ 테스트 주문 (새 주문 들어오는 느낌)</button>
-      <div className="foot">실제 연결 시: 손님이 QR로 주문하면 이 화면에 자동으로 새 주문이 떠요.</div>
+      <button className="testBtn" onClick={addTest}>＋ 테스트 주문 (작동 확인용)</button>
+      <div className="foot">손님이 QR로 주문하면 이 화면에 자동으로 떠요.</div>
     </div>
   );
 }
@@ -205,20 +233,16 @@ const CSS = `
 .newpill { font-size: 13px; font-weight: 800; color: var(--soft); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; }
 .newpill.on { color: #fff; background: var(--new); border-color: var(--new); animation: pulse 1.6s infinite; }
 @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(180,73,58,0.4) } 50% { box-shadow: 0 0 0 7px rgba(180,73,58,0) } }
-
 .tabs { display: flex; gap: 7px; padding: 14px 16px 6px; position: sticky; top: 64px; background: var(--bg); z-index: 9; }
 .tab { flex: 1; padding: 9px 4px; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; font-size: 12.5px; font-weight: 700; color: var(--soft); cursor: pointer; font-family: inherit; }
 .tab span { display: inline-block; margin-left: 4px; font-size: 12px; opacity: 0.7; }
 .tabOn { background: var(--primary); color: #fff; border-color: var(--primary); }
-
 .list { padding: 10px 16px 20px; display: flex; flex-direction: column; gap: 12px; }
 .empty { text-align: center; color: var(--soft); padding: 48px; font-size: 14px; }
-
 .order { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 15px; }
 .order.s-신규 { border-left: 5px solid var(--new); }
 .order.s-준비중 { border-left: 5px solid var(--prep); }
 .order.s-준비완료 { border-left: 5px solid var(--done); opacity: 0.85; }
-
 .oTop { display: flex; justify-content: space-between; align-items: center; }
 .oNoWrap { display: flex; align-items: baseline; gap: 7px; }
 .oNoLabel { font-size: 12px; color: var(--soft); font-weight: 700; }
@@ -229,16 +253,13 @@ const CSS = `
 .c-신규 { background: var(--new); }
 .c-준비중 { background: var(--prep); }
 .c-준비완료 { background: var(--done); }
-
 .oPkg { font-size: 13px; font-weight: 700; color: var(--primary); margin: 8px 0 4px; }
 .oItems { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .iTag { font-size: 12.5px; background: #F3ECDF; border-radius: 8px; padding: 5px 9px; font-weight: 600; }
 .oMemo { margin: 8px 0; padding: 9px 11px; background: #FBEEE9; border-radius: 10px; font-size: 13px; font-weight: 600; color: #9A3A2B; }
-
 .oFoot { margin-top: 10px; }
 .adv { width: 100%; border: none; background: var(--primary); color: #fff; font-size: 14px; font-weight: 800; padding: 13px; border-radius: 12px; cursor: pointer; font-family: inherit; }
 .clearBtn { width: 100%; border: 1px solid var(--line); background: var(--bg); color: var(--soft); font-size: 13.5px; font-weight: 700; padding: 12px; border-radius: 12px; cursor: pointer; font-family: inherit; }
-
 .testBtn { position: fixed; left: 50%; transform: translateX(-50%); bottom: 40px; width: min(408px, calc(100% - 32px)); z-index: 30; padding: 15px; background: var(--ink); color: #fff; border: none; border-radius: 14px; font-size: 14.5px; font-weight: 700; cursor: pointer; font-family: inherit; box-shadow: 0 8px 22px rgba(0,0,0,0.2); }
 .foot { position: fixed; left: 0; right: 0; bottom: 14px; text-align: center; font-size: 11.5px; color: var(--soft); }
 `;
