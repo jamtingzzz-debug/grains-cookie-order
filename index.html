@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="theme-color" content="#7A4A52" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="그래인스 쿠키 · 주문" />
+<title>그래인스 쿠키 · 주문</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #EFE9DD; }
+  #root { min-height: 100vh; }
+</style>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useMemo } = React;
+
+/* ============================================================
+   ⬇️ 여기만 바꾸면 사장님 가게로 변신합니다 (코드 몰라도 OK)
+   ============================================================ */
+
+const SHOP_NAME = "그래인스 쿠키";
+
+// 손님이 누르는 언어 버튼
+const LANGS = [["ko", "한국어"], ["en", "EN"], ["zh", "中文"], ["ja", "日本語"]];
+
+// 패키지(용기) 5종 — t: 언어별 이름 / cap: 담는 개수 / viz: 보여주는 방식
+const PACKAGES = [
+  { id: "bag15",   cap: 15, price: 9000,  emoji: "🛍️", viz: "gauge", t: { ko: "종이봉투", en: "Paper Bag", zh: "纸袋", ja: "紙袋" } },
+  { id: "round6",  cap: 6,  price: 17000, emoji: "🥫", viz: "ring",  t: { ko: "원형 틴", en: "Round Tin", zh: "圆形铁盒", ja: "丸缶" } },
+  { id: "square9", cap: 9,  price: 23000, emoji: "📦", viz: "grid",  t: { ko: "사각 틴", en: "Square Tin", zh: "方形铁盒", ja: "角缶" } },
+  { id: "barrelS", cap: 30, price: 18000, emoji: "🛢️", viz: "gauge", t: { ko: "배럴 (소)", en: "Barrel (S)", zh: "桶装(小)", ja: "バレル(小)" } },
+  { id: "barrelL", cap: 45, price: 25000, emoji: "🛢️", viz: "gauge", t: { ko: "배럴 (대)", en: "Barrel (L)", zh: "桶装(大)", ja: "バレル(大)" } },
+];
+
+// 분류 (내부 키는 한국어, 표시는 언어별)
+const CAT_KEYS = ["전체", "초코", "녹차·커피", "과일·제주", "고소·넛", "그 외"];
+const CAT_T = {
+  "전체":    { ko: "전체", en: "All", zh: "全部", ja: "すべて" },
+  "초코":    { ko: "초코", en: "Choco", zh: "巧克力", ja: "チョコ" },
+  "녹차·커피": { ko: "녹차·커피", en: "Tea·Coffee", zh: "茶·咖啡", ja: "茶·コーヒー" },
+  "과일·제주": { ko: "과일·제주", en: "Fruit·Jeju", zh: "水果·济州", ja: "フルーツ·済州" },
+  "고소·넛":  { ko: "고소·넛", en: "Nutty", zh: "坚果", ja: "ナッツ" },
+  "그 외":    { ko: "그 외", en: "Others", zh: "其他", ja: "その他" },
+};
+
+// 쿠키 26종 — emoji는 사진 자리, t는 언어별 이름
+const OPTIONS = [
+  { id: 1, emoji: "🐻", cat: "초코", t: { ko: "곰돌이초코쿠키", en: "Bear Choco", zh: "小熊巧克力", ja: "くまチョコ" } },
+  { id: 2, emoji: "🌀", cat: "초코", t: { ko: "초코롤쿠키", en: "Choco Roll", zh: "巧克力卷", ja: "チョコロール" } },
+  { id: 3, emoji: "🍫", cat: "초코", t: { ko: "초코아몬드쿠키", en: "Choco Almond", zh: "巧克力杏仁", ja: "チョコアーモンド" } },
+  { id: 4, emoji: "♟️", cat: "초코", t: { ko: "초코체스쿠키", en: "Choco Chess", zh: "巧克力切斯", ja: "チョコチェス" } },
+  { id: 5, emoji: "🍪", cat: "초코", t: { ko: "초코칩청크쿠키", en: "Choco Chip Chunk", zh: "巧克力豆", ja: "チョコチップチャンク" } },
+  { id: 6, emoji: "🟫", cat: "초코", t: { ko: "초코큐브쿠키", en: "Choco Cube", zh: "巧克力方块", ja: "チョコキューブ" } },
+  { id: 7, emoji: "🖤", cat: "초코", t: { ko: "쿠키앤초코쿠키", en: "Cookies & Choco", zh: "曲奇巧克力", ja: "クッキー＆チョコ" } },
+  { id: 8, emoji: "🍵", cat: "녹차·커피", t: { ko: "녹차랑그드샤", en: "Green Tea Langue", zh: "抹茶猫舌", ja: "抹茶ラングドシャ" } },
+  { id: 9, emoji: "🟢", cat: "녹차·커피", t: { ko: "녹차체스쿠키", en: "Green Tea Chess", zh: "抹茶切斯", ja: "抹茶チェス" } },
+  { id: 10, emoji: "☕", cat: "녹차·커피", t: { ko: "커피랑그드샤쿠키", en: "Coffee Langue", zh: "咖啡猫舌", ja: "コーヒーラングドシャ" } },
+  { id: 11, emoji: "☕", cat: "녹차·커피", t: { ko: "커피아몬드쿠키", en: "Coffee Almond", zh: "咖啡杏仁", ja: "コーヒーアーモンド" } },
+  { id: 12, emoji: "🍓", cat: "과일·제주", t: { ko: "딸기타르트쿠키", en: "Strawberry Tart", zh: "草莓挞", ja: "いちごタルト" } },
+  { id: 13, emoji: "🫐", cat: "과일·제주", t: { ko: "블루베리타르트쿠키", en: "Blueberry Tart", zh: "蓝莓挞", ja: "ブルーベリータルト" } },
+  { id: 14, emoji: "🍊", cat: "과일·제주", t: { ko: "제주감귤쿠키", en: "Jeju Tangerine", zh: "济州柑橘", ja: "済州みかん" } },
+  { id: 15, emoji: "🍊", cat: "과일·제주", t: { ko: "제주감귤타르트쿠키", en: "Jeju Tangerine Tart", zh: "济州柑橘挞", ja: "済州みかんタルト" } },
+  { id: 16, emoji: "🟠", cat: "과일·제주", t: { ko: "한라부쿠키", en: "Hallabu", zh: "汉拿", ja: "ハラブ" } },
+  { id: 17, emoji: "⚫", cat: "고소·넛", t: { ko: "검은깨쿠키", en: "Black Sesame", zh: "黑芝麻", ja: "黒ごま" } },
+  { id: 18, emoji: "🥥", cat: "고소·넛", t: { ko: "코코넛아몬드쿠키", en: "Coconut Almond", zh: "椰子杏仁", ja: "ココナッツアーモンド" } },
+  { id: 19, emoji: "🥥", cat: "고소·넛", t: { ko: "코코넛태게백쿠키", en: "Coconut Taegebaek", zh: "椰子太格百", ja: "ココナッツテゲベク" } },
+  { id: 20, emoji: "🌽", cat: "고소·넛", t: { ko: "콘아몬드쿠키", en: "Corn Almond", zh: "玉米杏仁", ja: "コーンアーモンド" } },
+  { id: 21, emoji: "🥜", cat: "고소·넛", t: { ko: "피넛버터쿠키", en: "Peanut Butter", zh: "花生酱", ja: "ピーナッツバター" } },
+  { id: 22, emoji: "🎃", cat: "그 외", t: { ko: "단호박쿠키", en: "Sweet Pumpkin", zh: "南瓜", ja: "かぼちゃ" } },
+  { id: 23, emoji: "🍪", cat: "그 외", t: { ko: "랑그드샤쿠키", en: "Langue de Chat", zh: "猫舌饼", ja: "ラングドシャ" } },
+  { id: 24, emoji: "🍠", cat: "그 외", t: { ko: "적고구마체스쿠키", en: "Sweet Potato Chess", zh: "紫薯切斯", ja: "さつまいもチェス" } },
+  { id: 25, emoji: "🍪", cat: "그 외", t: { ko: "콤비쿠키", en: "Combi", zh: "综合", ja: "コンビ" } },
+  { id: 26, emoji: "🧀", cat: "그 외", t: { ko: "크림치즈쿠키", en: "Cream Cheese", zh: "奶油奶酪", ja: "クリームチーズ" } },
+];
+
+/* ============================================================
+   ⬆️ 여기까지만 바꾸면 됩니다. 아래는 손대지 않아도 돼요.
+   ============================================================ */
+
+// UI 문구 (언어별)
+const T = {
+  ko: { tagline: "용기를 고르고, 원하는 쿠키를 골라 담으세요", step1: "STEP 1 · 용기를 고르세요", change: "용기 변경",
+    search: "쿠키 검색", add: "담기", full: "가득 참", order: "주문하기", review: "주문 확인", confirm: "주문 확정",
+    doneTitle: "주문이 접수됐어요", doneMsg: "직원이 준비해 드릴게요. 화면의 번호를 확인해 주세요.", orderNo: "주문번호",
+    payNote: "카운터에서 결제해 주세요.", newOrder: "처음으로", choosing: "고르는 중", filled: "가득 찼어요",
+    randomFill: "남은 칸 랜덤 채우기", hintDup: "같은 쿠키 여러 개도 가능해요", footnote: "주문 후 카운터에서 결제",
+    sentNote: "실제 배포 시: 이 주문이 직원 현황판으로 바로 전송됩니다.",
+    pickN: (n) => `쿠키 ${n}개 골라 담기`, remain: (r) => `${r}개 더 담을 수 있어요`, perCap: (c) => `${c}개입` },
+  en: { tagline: "Choose a package, then pick your cookies", step1: "STEP 1 · Choose a package", change: "Change",
+    search: "Search cookies", add: "Add", full: "Full", order: "Order", review: "Review order", confirm: "Place order",
+    doneTitle: "Order received", doneMsg: "Please wait — staff will prepare your order. Check your number.", orderNo: "Order No.",
+    payNote: "Please pay at the counter.", newOrder: "Start over", choosing: "Choosing", filled: "Full",
+    randomFill: "Fill remaining randomly", hintDup: "You can pick the same cookie more than once", footnote: "Pay at the counter after ordering",
+    sentNote: "When deployed: this order is sent straight to the staff board.",
+    pickN: (n) => `Pick ${n} cookies`, remain: (r) => `${r} more to add`, perCap: (c) => `holds ${c}` },
+  zh: { tagline: "先选包装，再挑选饼干", step1: "第一步 · 选择包装", change: "更换",
+    search: "搜索饼干", add: "加入", full: "已满", order: "下单", review: "确认订单", confirm: "确认下单",
+    doneTitle: "订单已接收", doneMsg: "请稍候，店员正在为您准备。请确认您的号码。", orderNo: "订单号",
+    payNote: "请到柜台付款。", newOrder: "重新开始", choosing: "选择中", filled: "已满",
+    randomFill: "随机填满剩余", hintDup: "同款饼干可多选", footnote: "下单后请到柜台付款",
+    sentNote: "正式部署后：订单会直接发送到店员看板。",
+    pickN: (n) => `挑选 ${n} 款饼干`, remain: (r) => `还可加 ${r} 个`, perCap: (c) => `可装${c}个` },
+  ja: { tagline: "容器を選んで、好きなクッキーを詰めましょう", step1: "STEP 1 · 容器を選ぶ", change: "変更",
+    search: "クッキーを検索", add: "追加", full: "満杯", order: "注文する", review: "注文確認", confirm: "注文を確定",
+    doneTitle: "注文を受け付けました", doneMsg: "スタッフが準備します。番号をご確認ください。", orderNo: "注文番号",
+    payNote: "カウンターでお支払いください。", newOrder: "最初に戻る", choosing: "選択中", filled: "満杯",
+    randomFill: "残りをランダムに詰める", hintDup: "同じクッキーを複数選べます", footnote: "ご注文後、カウンターでお支払い",
+    sentNote: "本番環境では、この注文がスタッフ画面に直接送信されます。",
+    pickN: (n) => `クッキーを${n}個選ぶ`, remain: (r) => `あと${r}個`, perCap: (c) => `${c}個入り` },
+};
+
+const won = (n) => n.toLocaleString("ko-KR") + "원";
+const byId = (id) => OPTIONS.find((o) => o.id === id);
+const L = (obj, lang) => (obj && (obj[lang] || obj.ko)) || "";
+
+function App() {
+  const [lang, setLang] = useState("ko");
+  const [view, setView] = useState("select");
+  const [pkg, setPkg] = useState(null);
+  const [picks, setPicks] = useState([]);
+  const [cat, setCat] = useState("전체");
+  const [query, setQuery] = useState("");
+  const [orderNo, setOrderNo] = useState(null);
+  const tr = T[lang];
+
+  const cap = pkg ? pkg.cap : 0;
+  const full = pkg && picks.length >= cap;
+  const countOf = (id) => picks.filter((p) => p === id).length;
+
+  const choosePkg = (p) => { setPkg(p); setPicks([]); setView("build"); };
+  const addOne = (id) => { if (!full) setPicks((p) => [...p, id]); };
+  const removeOne = (id) =>
+    setPicks((p) => { const i = p.lastIndexOf(id); if (i === -1) return p; const c = [...p]; c.splice(i, 1); return c; });
+  const fillRandom = () =>
+    setPicks((p) => { const c = [...p]; while (c.length < cap) c.push(OPTIONS[Math.floor(Math.random() * OPTIONS.length)].id); return c; });
+
+  const filtered = useMemo(
+    () => OPTIONS.filter((o) => (cat === "전체" || o.cat === cat) && (!query.trim() || L(o.t, lang).toLowerCase().includes(query.trim().toLowerCase()) || o.t.ko.includes(query.trim()))),
+    [cat, query, lang]
+  );
+
+  const summary = useMemo(() => {
+    const m = {};
+    picks.forEach((id) => (m[id] = (m[id] || 0) + 1));
+    return Object.entries(m).map(([id, n]) => ({ ...byId(+id), n }));
+  }, [picks]);
+
+  const submit = () => { setOrderNo(Math.floor(Math.random() * 900) + 100); setView("done"); };
+  const reset = () => { setView("select"); setPkg(null); setPicks([]); setOrderNo(null); };
+
+  return (
+    <div className="wrap">
+      <style>{CSS}</style>
+
+      <header className="hdr">
+        <div className="brand">{SHOP_NAME}</div>
+        <div className="langRow">
+          {LANGS.map(([code, label]) => (
+            <button key={code} className={"langBtn" + (lang === code ? " langOn" : "")} onClick={() => setLang(code)}>{label}</button>
+          ))}
+        </div>
+      </header>
+
+      {view === "select" && (
+        <main className="body">
+          <div className="tagline">{tr.tagline}</div>
+          <div className="stepLabel">{tr.step1}</div>
+          <div className="pkgList">
+            {PACKAGES.map((p) => (
+              <button key={p.id} className="pkgCard" onClick={() => choosePkg(p)}>
+                <span className="pkgEmoji">{p.emoji}</span>
+                <span className="pkgInfo">
+                  <span className="pkgName">{L(p.t, lang)}</span>
+                  <span className="pkgCap">{tr.pickN(p.cap)}</span>
+                </span>
+                <span className="pkgPrice">{won(p.price)}</span>
+              </button>
+            ))}
+          </div>
+          <div className="footnote">{tr.footnote}</div>
+        </main>
+      )}
+
+      {view === "build" && pkg && (
+        <main className="body">
+          <Stage pkg={pkg} picks={picks} cap={cap} lang={lang} tr={tr} onRemove={removeOne} onChange={() => setView("select")} />
+
+          {summary.length > 0 && (
+            <div className="picked">
+              {summary.map((s) => (
+                <button key={s.id} className="pickTag" onClick={() => removeOne(s.id)}>
+                  {s.emoji} {L(s.t, lang)}{s.n > 1 ? ` ×${s.n}` : ""} <em>✕</em>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="tinHelp">
+            {full ? "" : tr.remain(cap - picks.length) + " · " + tr.hintDup}
+            {!full && cap >= 15 && <button className="randBtn" onClick={fillRandom}>{tr.randomFill}</button>}
+          </div>
+
+          <input className="search" placeholder={tr.search} value={query} onChange={(e) => setQuery(e.target.value)} />
+          <div className="chips">
+            {CAT_KEYS.map((c) => (
+              <button key={c} className={"chip" + (c === cat ? " chipOn" : "")} onClick={() => setCat(c)}>{L(CAT_T[c], lang)}</button>
+            ))}
+          </div>
+
+          <div className="grid">
+            {filtered.map((o) => {
+              const n = countOf(o.id);
+              return (
+                <div key={o.id} className={"opt" + (n > 0 ? " optOn" : "")}>
+                  <div className="optEmoji">{o.emoji}</div>
+                  <div className="optName">{L(o.t, lang)}</div>
+                  {n === 0 ? (
+                    <button className="optAdd" disabled={full} onClick={() => addOne(o.id)}>{full ? tr.full : tr.add}</button>
+                  ) : (
+                    <div className="optStep">
+                      <button onClick={() => removeOne(o.id)}>－</button>
+                      <span>{n}</span>
+                      <button disabled={full} onClick={() => addOne(o.id)}>＋</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="footnote">{tr.footnote}</div>
+        </main>
+      )}
+
+      {view === "review" && pkg && (
+        <Sheet title={tr.review} onClose={() => setView("build")}>
+          <div className="recap">
+            <div className="recapTop"><strong>{L(pkg.t, lang)} · {tr.perCap(cap)}</strong><span>{won(pkg.price)}</span></div>
+            <div className="recapItems">
+              {summary.map((s) => (
+                <span key={s.id} className="recapTag">{s.emoji} {L(s.t, lang)}{s.n > 1 ? ` ×${s.n}` : ""}</span>
+              ))}
+            </div>
+          </div>
+          <div className="note">{tr.payNote}</div>
+          <button className="cta" onClick={submit}>{tr.confirm} · {won(pkg.price)}</button>
+        </Sheet>
+      )}
+
+      {view === "done" && orderNo && (
+        <Sheet title={tr.doneTitle} onClose={reset}>
+          <div className="doneIcon">✓</div>
+          <div className="bigNoLabel">{tr.orderNo}</div>
+          <div className="bigNo">{orderNo}</div>
+          <p className="doneMsg">{tr.doneMsg}</p>
+          <div className="note center">{tr.payNote}</div>
+          <button className="cta" onClick={reset}>{tr.newOrder}</button>
+          <div className="hint">{tr.sentNote}</div>
+        </Sheet>
+      )}
+
+      {view === "build" && (
+        <button className={"bottomBar" + (full ? "" : " barOff")} disabled={!full} onClick={() => setView("review")}>
+          {full ? `${tr.order} · ${won(pkg.price)}` : `${picks.length} / ${cap}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Stage({ pkg, picks, cap, lang, tr, onRemove, onChange }) {
+  return (
+    <div className="stage">
+      {pkg.viz === "ring" && <RingTin picks={picks} cap={cap} tr={tr} onRemove={onRemove} />}
+      {pkg.viz === "grid" && <GridTin picks={picks} cap={cap} tr={tr} onRemove={onRemove} />}
+      {pkg.viz === "gauge" && <Gauge picks={picks} cap={cap} />}
+      <div className="stageMeta">
+        <div className="gName">{L(pkg.t, lang)}</div>
+        <div className="gPrice">{won(pkg.price)} · {tr.perCap(cap)}</div>
+        <button className="gChange" onClick={onChange}>{tr.change}</button>
+      </div>
+    </div>
+  );
+}
+
+function RingTin({ picks, cap, tr, onRemove }) {
+  const slotPos = (i) => {
+    const angle = (-90 + i * (360 / cap)) * (Math.PI / 180);
+    const R = 78, Cc = 110, S = 54;
+    return { left: Cc + R * Math.cos(angle) - S / 2, top: Cc + R * Math.sin(angle) - S / 2 };
+  };
+  return (
+    <div className="tin round">
+      <div className="tinCenter">
+        <div className="tinCount">{picks.length}<span>/{cap}</span></div>
+        <div className="tinLabel">{picks.length >= cap ? tr.filled : tr.choosing}</div>
+      </div>
+      {Array.from({ length: cap }).map((_, i) => {
+        const id = picks[i]; const item = id ? byId(id) : null; const pos = slotPos(i);
+        return (
+          <div key={i} className={"slot" + (item ? " slotFull" : "")} style={{ left: pos.left, top: pos.top }}
+            onClick={() => item && onRemove(id)}>{item ? item.emoji : ""}</div>
+        );
+      })}
+    </div>
+  );
+}
+
+function GridTin({ picks, cap, tr, onRemove }) {
+  return (
+    <div className="tinGridWrap">
+      <div className="tin square" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        {Array.from({ length: cap }).map((_, i) => {
+          const id = picks[i]; const item = id ? byId(id) : null;
+          return (
+            <div key={i} className={"gslot" + (item ? " slotFull" : "")} onClick={() => item && onRemove(id)}>{item ? item.emoji : ""}</div>
+          );
+        })}
+      </div>
+      <div className="squareCount">{picks.length} / {cap} {picks.length >= cap ? "· " + tr.filled : ""}</div>
+    </div>
+  );
+}
+
+function Gauge({ picks, cap }) {
+  const R = 34, C = 2 * Math.PI * R;
+  const frac = cap ? picks.length / cap : 0;
+  return (
+    <svg width="84" height="84" viewBox="0 0 84 84" className="gauge">
+      <circle cx="42" cy="42" r={R} className="gTrack" />
+      <circle cx="42" cy="42" r={R} className="gFill" strokeDasharray={C} strokeDashoffset={C * (1 - frac)} transform="rotate(-90 42 42)" />
+      <text x="42" y="38" className="gNum">{picks.length}</text>
+      <text x="42" y="54" className="gCap">/ {cap}</text>
+    </svg>
+  );
+}
+
+function Sheet({ children, onClose, title }) {
+  return (
+    <div className="sheetOverlay" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheetGrip" />
+        {title && <div className="sheetTitle">{title}</div>}
+        <button className="sheetClose" onClick={onClose} aria-label="close">✕</button>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+const CSS = `
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+.wrap {
+  --bg:#F7F2E9; --surface:#FFFFFF; --ink:#2B2320; --soft:#8A7F75;
+  --primary:#7A4A52; --primary-deep:#5E373E; --accent:#C2A24E; --line:#EAE2D4;
+  max-width: 440px; margin: 0 auto; min-height: 100vh; position: relative;
+  background: var(--bg); color: var(--ink); padding-bottom: 92px;
+  font-family:'Pretendard',-apple-system,'Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
+}
+.hdr { padding: 16px 18px 12px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 10; }
+.brand { font-size: 21px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 11px; }
+.langRow { display: flex; gap: 6px; }
+.langBtn { flex: 1; padding: 8px 4px; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; font-size: 13px; font-weight: 700; color: var(--soft); cursor: pointer; font-family: inherit; }
+.langOn { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+.body { padding: 18px 16px 28px; }
+.tagline { font-size: 14px; color: var(--soft); margin-bottom: 16px; line-height: 1.5; }
+.stepLabel { font-size: 12px; font-weight: 800; color: var(--accent); letter-spacing: 0.03em; margin-bottom: 12px; }
+
+.pkgList { display: flex; flex-direction: column; gap: 11px; }
+.pkgCard { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px; cursor: pointer; font-family: inherit; transition: transform .12s ease, border-color .12s; }
+.pkgCard:active { transform: scale(0.985); }
+.pkgCard:hover { border-color: var(--primary); }
+.pkgEmoji { font-size: 34px; width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; background: #F3ECDF; border-radius: 14px; flex: 0 0 auto; }
+.pkgInfo { flex: 1; display: flex; flex-direction: column; }
+.pkgName { font-size: 16px; font-weight: 800; }
+.pkgCap { font-size: 12.5px; color: var(--soft); margin-top: 2px; }
+.pkgPrice { font-size: 15px; font-weight: 800; white-space: nowrap; }
+
+.stage { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin-bottom: 14px; }
+.stageMeta { text-align: center; margin-top: 12px; }
+.gName { font-size: 17px; font-weight: 800; }
+.gPrice { font-size: 13px; color: var(--soft); margin-top: 2px; }
+.gChange { margin-top: 10px; background: none; border: 1px solid var(--line); border-radius: 9px; padding: 7px 14px; font-size: 12.5px; font-weight: 600; color: var(--primary); cursor: pointer; font-family: inherit; }
+
+.gauge { display: block; margin: 4px auto 0; }
+.gTrack { fill: none; stroke: #EFE7D7; stroke-width: 10; }
+.gFill { fill: none; stroke: var(--primary); stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset .35s ease; }
+.gNum { fill: var(--ink); font-size: 22px; font-weight: 800; text-anchor: middle; font-family: inherit; }
+.gCap { fill: var(--soft); font-size: 12px; text-anchor: middle; font-family: inherit; }
+
+.tin.round { position: relative; width: 220px; height: 220px; margin: 0 auto; border-radius: 50%; background: radial-gradient(circle at 50% 38%, #FFFDF8, #F0E7D4); border: 3px solid var(--accent); box-shadow: inset 0 0 0 6px #FBF6EC, 0 10px 30px rgba(122,74,82,0.12); }
+.tinCenter { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); text-align: center; pointer-events: none; }
+.tinCount { font-size: 30px; font-weight: 800; color: var(--primary); line-height: 1; }
+.tinCount span { font-size: 16px; color: var(--soft); font-weight: 700; }
+.tinLabel { font-size: 11.5px; color: var(--soft); margin-top: 4px; }
+.slot { position: absolute; width: 54px; height: 54px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 26px; border: 2px dashed #D6C9AE; background: #FBF7EE; transition: transform .15s ease; }
+.slotFull { border: 2px solid var(--accent); background: #fff; cursor: pointer; box-shadow: 0 3px 8px rgba(0,0,0,0.06); }
+.slotFull:active { transform: scale(0.9); }
+
+.tinGridWrap { text-align: center; }
+.tin.square { display: grid; gap: 8px; width: 196px; margin: 0 auto; padding: 12px; background: linear-gradient(160deg, #FFFDF8, #F0E7D4); border: 3px solid var(--accent); border-radius: 16px; box-shadow: inset 0 0 0 5px #FBF6EC, 0 10px 30px rgba(122,74,82,0.12); }
+.gslot { aspect-ratio: 1; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 24px; border: 2px dashed #D6C9AE; background: #FBF7EE; }
+.gslot.slotFull { border: 2px solid var(--accent); background: #fff; cursor: pointer; }
+.squareCount { margin-top: 12px; font-size: 14px; font-weight: 700; color: var(--primary); }
+
+.picked { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+.pickTag { background: #fff; border: 1px solid var(--primary); color: var(--primary-deep); border-radius: 999px; padding: 7px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.pickTag em { font-style: normal; opacity: 0.55; margin-left: 2px; }
+
+.tinHelp { font-size: 13px; color: var(--soft); margin-bottom: 14px; line-height: 1.5; }
+.randBtn { display: inline-block; margin-left: 8px; background: var(--accent); color: #fff; border: none; border-radius: 9px; padding: 6px 11px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+
+.search { width: 100%; padding: 13px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); font-size: 15px; font-family: inherit; margin-bottom: 12px; }
+.search:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 14px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex: 0 0 auto; padding: 9px 15px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--soft); font-size: 13.5px; font-weight: 600; font-family: inherit; cursor: pointer; }
+.chipOn { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+.opt { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px; text-align: center; }
+.optOn { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary) inset; }
+.optEmoji { font-size: 34px; line-height: 1; margin: 4px 0 8px; }
+.optName { font-size: 13px; font-weight: 700; letter-spacing: -0.01em; min-height: 34px; display: flex; align-items: center; justify-content: center; }
+.optAdd { width: 100%; padding: 9px; border: none; border-radius: 10px; background: var(--primary); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; font-family: inherit; margin-top: 4px; }
+.optAdd:disabled { background: #D8CFC2; cursor: not-allowed; }
+.optStep { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; background: #F3ECDF; border-radius: 10px; padding: 4px 6px; }
+.optStep button { width: 30px; height: 30px; border: none; background: #fff; border-radius: 8px; font-size: 17px; color: var(--primary); cursor: pointer; }
+.optStep button:disabled { color: #C9BEAD; cursor: not-allowed; }
+.optStep span { font-weight: 800; }
+.footnote { text-align: center; color: var(--soft); font-size: 12px; margin-top: 22px; }
+
+.bottomBar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; width: min(408px, calc(100% - 32px)); z-index: 30; text-align: center; padding: 17px; background: var(--primary); color: #fff; border: none; border-radius: 16px; font-size: 16px; font-weight: 800; cursor: pointer; font-family: inherit; box-shadow: 0 8px 24px rgba(94,55,62,0.3); }
+.barOff { background: #CFC4B5; box-shadow: none; cursor: default; }
+
+.sheetOverlay { position: fixed; inset: 0; z-index: 40; background: rgba(30,24,22,0.42); display: flex; align-items: flex-end; justify-content: center; animation: fade .2s ease; }
+.sheet { width: 100%; max-width: 440px; background: var(--bg); border-radius: 26px 26px 0 0; padding: 10px 20px 28px; position: relative; max-height: 92vh; overflow-y: auto; animation: rise .26s cubic-bezier(.2,.8,.2,1); }
+@keyframes fade { from { opacity: 0 } }
+@keyframes rise { from { transform: translateY(40px); opacity: .6 } }
+.sheetGrip { width: 40px; height: 4px; background: var(--line); border-radius: 4px; margin: 4px auto 14px; }
+.sheetTitle { font-size: 17px; font-weight: 800; margin-bottom: 14px; }
+.sheetClose { position: absolute; top: 16px; right: 18px; background: none; border: none; font-size: 16px; color: var(--soft); cursor: pointer; }
+
+.recap { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-bottom: 16px; }
+.recapTop { display: flex; justify-content: space-between; align-items: center; font-size: 15px; margin-bottom: 10px; gap: 10px; }
+.recapItems { display: flex; flex-wrap: wrap; gap: 6px; }
+.recapTag { font-size: 12.5px; background: #F3ECDF; border-radius: 999px; padding: 5px 10px; font-weight: 600; }
+.note { font-size: 12.5px; color: var(--soft); background: #F2EADC; border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; line-height: 1.5; }
+.note.center { text-align: center; }
+.cta { width: 100%; padding: 16px; background: var(--primary); color: #fff; border: none; border-radius: 15px; font-size: 16px; font-weight: 800; cursor: pointer; margin-top: 6px; font-family: inherit; }
+.doneIcon { width: 56px; height: 56px; margin: 6px auto 14px; background: var(--primary); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; }
+.bigNoLabel { text-align: center; font-size: 13px; color: var(--soft); font-weight: 700; }
+.bigNo { text-align: center; font-size: 66px; font-weight: 800; line-height: 1.1; color: var(--primary); margin: 2px 0 10px; }
+.doneMsg { text-align: center; font-size: 14.5px; line-height: 1.6; margin-bottom: 16px; color: #4A423D; }
+.hint { font-size: 12px; color: var(--soft); text-align: center; margin-top: 14px; line-height: 1.5; }
+`;
+
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+</body>
+</html>
