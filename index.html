@@ -11,14 +11,35 @@
 <style>
   html, body { margin: 0; padding: 0; background: #EFE9DD; }
   #root { min-height: 100vh; }
+  #boot { display:flex; align-items:center; justify-content:center; min-height:100vh; font-family:-apple-system,system-ui,sans-serif; color:#8A7F75; font-size:15px; }
+  #err { display:none; padding:20px; margin:16px; background:#FBEEE9; border:1px solid #E0B4A8; border-radius:12px; color:#9A3A2B; font-family:-apple-system,system-ui,monospace; font-size:13px; white-space:pre-wrap; word-break:break-word; line-height:1.5; }
 </style>
-<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script>
+  // 화면에 오류를 표시 (빈 화면 방지 + 원인 파악용)
+  function showErr(msg) {
+    var e = document.getElementById("err");
+    if (!e) return;
+    e.style.display = "block";
+    e.textContent = "문제가 발생했어요. 아래 내용을 캡처해서 보여주세요:\n\n" + msg;
+    var b = document.getElementById("boot");
+    if (b) b.style.display = "none";
+  }
+  window.addEventListener("error", function (ev) {
+    showErr((ev.message || "오류") + (ev.filename ? "\n" + ev.filename + ":" + ev.lineno : ""));
+  });
+  window.addEventListener("unhandledrejection", function (ev) {
+    showErr("Promise 오류: " + (ev.reason && ev.reason.message ? ev.reason.message : ev.reason));
+  });
+</script>
+<script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
 </head>
 <body>
-<div id="root"></div>
-<script type="text/babel" data-presets="react">
+<div id="root"><div id="boot">불러오는 중…</div></div>
+<div id="err"></div>
+<script type="text/babel" data-presets="env,react">
+try {
 const { useState, useMemo } = React;
 
 /* ============================================================
@@ -168,6 +189,7 @@ function App() {
         </div>
       </header>
 
+      {/* 1) 용기 고르기 */}
       {view === "select" && (
         <main className="body">
           <div className="tagline">{tr.tagline}</div>
@@ -188,6 +210,7 @@ function App() {
         </main>
       )}
 
+      {/* 2) 쿠키 담기 */}
       {view === "build" && pkg && (
         <main className="body">
           <Stage pkg={pkg} picks={picks} cap={cap} lang={lang} tr={tr} onRemove={removeOne} onChange={() => setView("select")} />
@@ -238,6 +261,7 @@ function App() {
         </main>
       )}
 
+      {/* 3) 주문 확인 */}
       {view === "review" && pkg && (
         <Sheet title={tr.review} onClose={() => setView("build")}>
           <div className="recap">
@@ -253,6 +277,7 @@ function App() {
         </Sheet>
       )}
 
+      {/* 4) 완료 — 주문번호 */}
       {view === "done" && orderNo && (
         <Sheet title={tr.doneTitle} onClose={reset}>
           <div className="doneIcon">✓</div>
@@ -466,6 +491,9 @@ const CSS = `
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(<App />);
+} catch (e) {
+  showErr(e && e.stack ? e.stack : String(e));
+}
 </script>
 </body>
 </html>
