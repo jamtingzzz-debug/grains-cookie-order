@@ -47,7 +47,7 @@
 <div id="err"></div>
 <script type="text/babel" data-presets="env,react">
 try {
-const { useState, useMemo } = React;
+const { useState, useMemo, useEffect, useRef } = React;
 
 /* ============================================================
    ⬇️ 여기만 바꾸면 사장님 가게로 변신합니다 (코드 몰라도 OK)
@@ -144,6 +144,18 @@ const T = {
     pickN: (n) => `クッキーを${n}個選ぶ`, remain: (r) => `あと${r}個`, perCap: (c) => `${c}個入り` },
 };
 
+const STEPS = ["신규", "계산완료", "준비완료"];
+const STEP_LABEL = {
+  "신규":   { ko: "주문", en: "Ordered", zh: "已下单", ja: "注文済" },
+  "계산완료": { ko: "계산", en: "Paid", zh: "已付款", ja: "支払済" },
+  "준비완료": { ko: "수령", en: "Ready", zh: "可取", ja: "受取" },
+};
+const STATUS_MSG = {
+  "신규":   { ko: "주문이 접수됐어요. 카운터에서 결제해 주세요.", en: "Order received. Please pay at the counter.", zh: "订单已接收，请到柜台付款。", ja: "注文を受け付けました。カウンターでお支払いください。" },
+  "계산완료": { ko: "계산이 완료됐어요. 잠시만 기다려 주세요.", en: "Payment confirmed. Please wait a moment.", zh: "已确认付款，请稍候。", ja: "お支払いを確認しました。少々お待ちください。" },
+  "준비완료": { ko: "준비완료! 카운터에서 받아가세요.", en: "Ready! Please pick up at the counter.", zh: "已准备好！请到柜台领取。", ja: "準備完了！カウンターでお受け取りください。" },
+};
+
 const won = (n) => n.toLocaleString("ko-KR") + "원";
 const byId = (id) => OPTIONS.find((o) => o.id === id);
 const L = (obj, lang) => (obj && (obj[lang] || obj.ko)) || "";
@@ -156,6 +168,9 @@ function App() {
   const [cat, setCat] = useState("전체");
   const [query, setQuery] = useState("");
   const [orderNo, setOrderNo] = useState(null);
+  const [orderKey, setOrderKey] = useState(null);
+  const [status, setStatus] = useState("신규");
+  const audioRef = useRef(null);
   const tr = T[lang];
 
   const cap = pkg ? pkg.cap : 0;
@@ -180,24 +195,61 @@ function App() {
     return Object.entries(m).map(([id, n]) => ({ ...byId(+id), n }));
   }, [picks]);
 
+  const notify = (st) => {
+    try { if (navigator.vibrate) navigator.vibrate(st === "준비완료" ? [200, 100, 200] : 160); } catch (e) {}
+    try {
+      const ctx = audioRef.current; if (!ctx) return; ctx.resume();
+      const times = st === "준비완료" ? 2 : 1;
+      for (let i = 0; i < times; i++) {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.frequency.value = st === "준비완료" ? 988 : 784; o.type = "sine";
+        const t0 = ctx.currentTime + i * 0.3;
+        g.gain.setValueAtTime(0.001, t0);
+        g.gain.exponentialRampToValueAtTime(0.4, t0 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.25);
+        o.start(t0); o.stop(t0 + 0.27);
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    if (!orderKey) return;
+    const db = window.__db; if (!db) return;
+    const ref = db.ref("orders/" + orderKey + "/status");
+    let prev = "신규";
+    const cb = ref.on("value", (snap) => {
+      const st = snap.val();
+      if (!st) return;
+      if (st !== prev) { setStatus(st); if (st !== "신규") notify(st); prev = st; }
+    });
+    return () => ref.off("value", cb);
+  }, [orderKey]);
+
   const submit = async () => {
-    let no;
+    // 소리 잠금 해제 (손님 탭 = 사용자 동작)
+    try { audioRef.current = audioRef.current || new (window.AudioContext || window.webkitAudioContext)(); audioRef.current.resume(); } catch (e) {}
+    let no, key = null;
     try {
       const db = window.__db;
       const res = await db.ref("counter").transaction((c) => (c || 0) + 1);
       no = res.snapshot.val();
-      await db.ref("orders").push({
+      const ref = db.ref("orders").push({
         no, ts: Date.now(), pkg: pkg.t.ko, price: pkg.price,
         items: summary.map((s) => ({ name: s.t.ko, n: s.n })),
         status: "신규",
       });
+      key = ref.key;
+      await ref;
     } catch (e) {
       no = Math.floor(Math.random() * 900) + 100; // 연결 실패 시에도 손님 화면은 진행
     }
     setOrderNo(no);
+    setOrderKey(key);
+    setStatus("신규");
     setView("done");
   };
-  const reset = () => { setView("select"); setPkg(null); setPicks([]); setOrderNo(null); };
+  const reset = () => { setView("select"); setPkg(null); setPicks([]); setOrderNo(null); setOrderKey(null); setStatus("신규"); };
 
   return (
     <div className="wrap">
@@ -303,11 +355,24 @@ function App() {
       {/* 4) 완료 — 주문번호 */}
       {view === "done" && orderNo && (
         <Sheet title={tr.doneTitle} onClose={reset}>
-          <div className="doneIcon">✓</div>
-          <div className="bigNoLabel">{tr.orderNo}</div>
-          <div className="bigNo">{orderNo}</div>
-          <p className="doneMsg">{tr.doneMsg}</p>
-          <div className="note center">{tr.payNote}</div>
+          <div className={"statusBig s-" + status}>
+            <div className="bigNoLabel">{tr.orderNo}</div>
+            <div className="bigNo">{orderNo}</div>
+          </div>
+          <div className="tracker">
+            {STEPS.map((st, i) => {
+              const idx = STEPS.indexOf(status);
+              const active = idx >= i;
+              const current = status === st;
+              return (
+                <div key={st} className={"tstep" + (active ? " on" : "") + (current ? " cur" : "")}>
+                  <div className="tdot">{active ? "✓" : i + 1}</div>
+                  <div className="tlabel">{L(STEP_LABEL[st], lang)}</div>
+                </div>
+              );
+            })}
+          </div>
+          <p className={"doneMsg" + (status === "준비완료" ? " ready" : "")}>{L(STATUS_MSG[status], lang)}</p>
           <button className="cta" onClick={reset}>{tr.newOrder}</button>
           <div className="hint">{tr.sentNote}</div>
         </Sheet>
@@ -526,6 +591,19 @@ const CSS = `
 .gslot { overflow:hidden; }
 .slotImg { width:100%; height:100%; object-fit:cover; display:block; }
 .slotEmoji { font-size:26px; }
+.statusBig { text-align:center; padding:4px 0 2px; }
+.statusBig.s-준비완료 .bigNo { color:#2F7D4F; }
+.tracker { display:flex; align-items:flex-start; justify-content:space-between; margin:18px 6px 14px; }
+.tstep { flex:1; text-align:center; position:relative; }
+.tstep:not(:first-child)::before { content:""; position:absolute; top:16px; left:-50%; width:100%; height:3px; background:#E7DFCF; z-index:0; }
+.tstep.on:not(:first-child)::before { background:var(--primary); }
+.tdot { position:relative; z-index:1; width:34px; height:34px; border-radius:50%; margin:0 auto 6px; display:flex; align-items:center; justify-content:center; background:#E7DFCF; color:#A99B86; font-weight:800; font-size:14px; }
+.tstep.on .tdot { background:var(--primary); color:#fff; }
+.tstep.cur .tdot { background:var(--accent); color:#fff; animation:tpulse 1.2s infinite; }
+.tlabel { font-size:12px; font-weight:700; color:var(--soft); }
+.tstep.on .tlabel { color:var(--ink); }
+@keyframes tpulse { 0%,100%{ box-shadow:0 0 0 0 rgba(194,162,78,0.5);} 50%{ box-shadow:0 0 0 8px rgba(194,162,78,0);} }
+.doneMsg.ready { color:#2F7D4F; font-weight:800; font-size:17px; }
 `;
 
 

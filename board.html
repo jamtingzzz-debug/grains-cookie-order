@@ -6,7 +6,6 @@
 <meta name="theme-color" content="#7A4A52" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-title" content="그래인스 쿠키 · 주문 현황판" />
 <title>그래인스 쿠키 · 주문 현황판</title>
 <style>
   html, body { margin: 0; padding: 0; background: #EFE9DD; }
@@ -27,8 +26,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
 <script>
-  // ===== Firebase 설정 =====
-  // ⚠️ databaseURL은 Realtime Database 페이지 맨 위 주소와 같아야 해요. 다르면 이 줄만 교체하세요.
   var firebaseConfig = {
     apiKey: "AIzaSyBZlyyD7T5FI6sGF0vSmuM4QmtoG77KNvs",
     authDomain: "grains-cookies-order.firebaseapp.com",
@@ -38,10 +35,8 @@
     messagingSenderId: "613602106224",
     appId: "1:613602106224:web:c1842cad52458e67bf4db5"
   };
-  try {
-    firebase.initializeApp(firebaseConfig);
-    window.__db = firebase.database();
-  } catch (e) { console.error("Firebase init 실패:", e); }
+  try { firebase.initializeApp(firebaseConfig); window.__db = firebase.database(); }
+  catch (e) { console.error("Firebase init 실패:", e); }
 </script>
 <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
@@ -67,8 +62,8 @@ const COOKIES = [
   "피넛버터쿠키", "크림치즈쿠키", "검은깨쿠키", "코코넛아몬드쿠키", "한라부쿠키",
 ];
 
-const STATUS_NEXT = { 신규: "준비중", 준비중: "준비완료", 준비완료: null };
-const NEXT_LABEL = { 신규: "준비 시작", 준비중: "준비 완료" };
+const STATUS_NEXT = { 신규: "계산완료", 계산완료: "준비완료", 준비완료: null };
+const NEXT_LABEL = { 신규: "계산 완료", 계산완료: "준비 완료" };
 
 const fmtTime = (ts) => {
   const d = new Date(ts || Date.now());
@@ -141,7 +136,7 @@ function App() {
   const clear = (key) => { window.__db.ref("orders/" + key).remove(); };
 
   const counts = useMemo(() => {
-    const c = { 진행중: 0, 신규: 0, 준비중: 0, 준비완료: 0 };
+    const c = { 진행중: 0, 신규: 0, 계산완료: 0, 준비완료: 0 };
     orders.forEach((o) => { c[o.status] = (c[o.status] || 0) + 1; if (o.status !== "준비완료") c.진행중 += 1; });
     return c;
   }, [orders]);
@@ -163,7 +158,7 @@ function App() {
       </header>
 
       <div className="tabs">
-        {[["진행중", counts.진행중], ["신규", counts.신규], ["준비중", counts.준비중], ["준비완료", counts.준비완료]].map(([t, c]) => (
+        {[["진행중", counts.진행중], ["신규", counts.신규], ["계산완료", counts.계산완료], ["준비완료", counts.준비완료]].map(([t, c]) => (
           <button key={t} className={"tab" + (filter === t ? " tabOn" : "")} onClick={() => setFilter(t)}>
             {t}<span>{c}</span>
           </button>
@@ -241,7 +236,7 @@ const CSS = `
 .empty { text-align: center; color: var(--soft); padding: 48px; font-size: 14px; }
 .order { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 15px; }
 .order.s-신규 { border-left: 5px solid var(--new); }
-.order.s-준비중 { border-left: 5px solid var(--prep); }
+.order.s-계산완료 { border-left: 5px solid var(--prep); }
 .order.s-준비완료 { border-left: 5px solid var(--done); opacity: 0.85; }
 .oTop { display: flex; justify-content: space-between; align-items: center; }
 .oNoWrap { display: flex; align-items: baseline; gap: 7px; }
@@ -251,7 +246,7 @@ const CSS = `
 .oTime { font-size: 12px; color: var(--soft); }
 .chip { font-size: 11.5px; font-weight: 800; padding: 4px 9px; border-radius: 999px; color: #fff; }
 .c-신규 { background: var(--new); }
-.c-준비중 { background: var(--prep); }
+.c-계산완료 { background: var(--prep); }
 .c-준비완료 { background: var(--done); }
 .oPkg { font-size: 13px; font-weight: 700; color: var(--primary); margin: 8px 0 4px; }
 .oItems { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
@@ -267,9 +262,7 @@ const CSS = `
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(<App />);
-} catch (e) {
-  showErr(e && e.stack ? e.stack : String(e));
-}
+} catch (e) { showErr(e && e.stack ? e.stack : String(e)); }
 </script>
 </body>
 </html>
