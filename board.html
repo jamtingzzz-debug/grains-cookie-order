@@ -51,17 +51,6 @@ const { useState, useMemo, useRef, useEffect } = React;
 
 const SHOP = "그래인스 쿠키";
 
-// 패키지 (테스트 주문 생성용)
-const PKGS = [
-  { name: "종이봉투", cap: 15, price: 9000 },
-  { name: "원형 틴", cap: 6, price: 17000 },
-  { name: "사각 틴", cap: 9, price: 23000 },
-];
-const COOKIES = [
-  "초코칩청크쿠키", "곰돌이초코쿠키", "녹차랑그드샤", "딸기타르트쿠키", "제주감귤쿠키",
-  "피넛버터쿠키", "크림치즈쿠키", "검은깨쿠키", "코코넛아몬드쿠키", "한라부쿠키",
-];
-
 const STATUS_NEXT = { 신규: "계산완료", 계산완료: "준비완료", 준비완료: null };
 const NEXT_LABEL = { 신규: "계산 완료", 계산완료: "준비 완료" };
 
@@ -70,21 +59,6 @@ const fmtTime = (ts) => {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 const won = (n) => (n || 0).toLocaleString("ko-KR") + "원";
-
-function randomOrder(no) {
-  const pk = PKGS[Math.floor(Math.random() * PKGS.length)];
-  const picks = {};
-  for (let i = 0; i < pk.cap; i++) {
-    const c = COOKIES[Math.floor(Math.random() * COOKIES.length)];
-    picks[c] = (picks[c] || 0) + 1;
-  }
-  return {
-    no, ts: Date.now(), pkg: pk.name, price: pk.price,
-    memo: Math.random() > 0.7 ? "견과류 알레르기 있어요" : "",
-    items: Object.entries(picks).map(([name, n]) => ({ name, n })),
-    status: "신규",
-  };
-}
 
 function App() {
   const [orders, setOrders] = useState([]);
@@ -131,18 +105,6 @@ function App() {
     return () => ref.off("value", cb);
   }, []);
 
-  const addTest = async () => {
-    try {
-      const d = new Date();
-      const today = d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
-      const res = await window.__db.ref("counter").transaction((cur) => {
-        if (!cur || cur.date !== today) return { date: today, n: 1 };
-        return { date: today, n: (cur.n || 0) + 1 };
-      });
-      const cv = res.snapshot.val();
-      await window.__db.ref("orders").push(randomOrder((cv && cv.n) ? cv.n : 1));
-    } catch (e) {}
-  };
   const advance = (key, status) => { window.__db.ref("orders/" + key + "/status").set(STATUS_NEXT[status]); };
   const clear = (key) => { window.__db.ref("orders/" + key).remove(); };
   const cancelOrder = (key) => { if (window.confirm("이 주문을 취소할까요? 손님 화면에 취소 알림이 갑니다.")) clear(key); };
@@ -225,7 +187,6 @@ function App() {
         )}
       </main>
 
-      <button className="testBtn" onClick={addTest}>＋ 테스트 주문 (작동 확인용)</button>
       <div className="foot">손님이 QR로 주문하면 이 화면에 자동으로 떠요.</div>
     </div>
   );
@@ -239,7 +200,7 @@ const CSS = `
   --primary:#7A4A52; --accent:#C2A24E; --line:#EAE2D4;
   --new:#B4493A; --prep:#C2872E; --done:#7E9A6E;
   max-width: 440px; margin: 0 auto; min-height: 100vh; background: var(--bg); color: var(--ink);
-  padding-bottom: 96px; font-family:'Pretendard',-apple-system,'Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
+  padding-bottom: 40px; font-family:'Pretendard',-apple-system,'Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
 }
 .hdr { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 14px; background: var(--bg); border-bottom: 1px solid var(--line); }
 .brand { font-size: 21px; font-weight: 800; letter-spacing: -0.02em; }
@@ -277,7 +238,6 @@ const CSS = `
 .cancelBtn { width:100%; border:1px solid #E6CFC9; background:#FBF1EF; color:#9A3A2B; font-size:12.5px; font-weight:700; padding:9px; border-radius:10px; cursor:pointer; font-family:inherit; }
 .adv { width: 100%; border: none; background: var(--primary); color: #fff; font-size: 14px; font-weight: 800; padding: 13px; border-radius: 12px; cursor: pointer; font-family: inherit; }
 .clearBtn { width: 100%; border: 1px solid var(--line); background: var(--bg); color: var(--soft); font-size: 13.5px; font-weight: 700; padding: 12px; border-radius: 12px; cursor: pointer; font-family: inherit; }
-.testBtn { position: fixed; left: 50%; transform: translateX(-50%); bottom: 40px; width: min(408px, calc(100% - 32px)); z-index: 30; padding: 15px; background: var(--ink); color: #fff; border: none; border-radius: 14px; font-size: 14.5px; font-weight: 700; cursor: pointer; font-family: inherit; box-shadow: 0 8px 22px rgba(0,0,0,0.2); }
 .foot { position: fixed; left: 0; right: 0; bottom: 14px; text-align: center; font-size: 11.5px; color: var(--soft); }
 `;
 
