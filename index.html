@@ -249,8 +249,14 @@ function App() {
     let no, key = null;
     try {
       const db = window.__db;
-      const res = await db.ref("counter").transaction((c) => (c || 0) + 1);
-      no = res.snapshot.val();
+      const d = new Date();
+      const today = d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+      const res = await db.ref("counter").transaction((cur) => {
+        if (!cur || cur.date !== today) return { date: today, n: 1 };  // 매일 1번부터
+        return { date: today, n: (cur.n || 0) + 1 };
+      });
+      const cv = res.snapshot.val();
+      no = (cv && cv.n) ? cv.n : (Math.floor(Math.random() * 900) + 100);
       const ref = db.ref("orders").push({
         no, ts: Date.now(), pkg: pkg.t.ko, price: pkg.price,
         items: summary.map((s) => ({ name: s.t.ko, n: s.n })),

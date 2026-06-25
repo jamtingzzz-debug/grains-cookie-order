@@ -112,7 +112,12 @@ function App() {
     const ref = db.ref("orders");
     const cb = ref.on("value", (snap) => {
       const val = snap.val() || {};
-      const list = Object.entries(val).map(([key, o]) => ({ key, ...o }));
+      let list = Object.entries(val).map(([key, o]) => ({ key, ...o }));
+      const cutoff = Date.now() - 12 * 60 * 60 * 1000;  // 12시간 지난 주문 자동 정리
+      list = list.filter((o) => {
+        if (o.ts && o.ts < cutoff) { try { ref.child(o.key).remove(); } catch (e) {} return false; }
+        return true;
+      });
       list.sort((a, b) => (b.ts || 0) - (a.ts || 0));
       let isNew = false;
       list.forEach((o) => {
@@ -128,13 +133,20 @@ function App() {
 
   const addTest = async () => {
     try {
-      const res = await window.__db.ref("counter").transaction((c) => (c || 0) + 1);
-      await window.__db.ref("orders").push(randomOrder(res.snapshot.val()));
+      const d = new Date();
+      const today = d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+      const res = await window.__db.ref("counter").transaction((cur) => {
+        if (!cur || cur.date !== today) return { date: today, n: 1 };
+        return { date: today, n: (cur.n || 0) + 1 };
+      });
+      const cv = res.snapshot.val();
+      await window.__db.ref("orders").push(randomOrder((cv && cv.n) ? cv.n : 1));
     } catch (e) {}
   };
   const advance = (key, status) => { window.__db.ref("orders/" + key + "/status").set(STATUS_NEXT[status]); };
   const clear = (key) => { window.__db.ref("orders/" + key).remove(); };
   const cancelOrder = (key) => { if (window.confirm("이 주문을 취소할까요? 손님 화면에 취소 알림이 갑니다.")) clear(key); };
+  const clearAll = () => { if (window.confirm("화면의 모든 주문을 지울까요? (마감 정리용)")) window.__db.ref("orders").remove(); };
 
   const counts = useMemo(() => {
     const c = { 진행중: 0, 신규: 0, 계산완료: 0, 준비완료: 0 };
@@ -155,7 +167,10 @@ function App() {
           <div className="brand">{SHOP}</div>
           <div className="sub">주문 현황판 · 직원용</div>
         </div>
-        <div className={"newpill" + (counts.신규 > 0 ? " on" : "")}>신규 {counts.신규}</div>
+        <div className="hdrRight">
+          <div className={"newpill" + (counts.신규 > 0 ? " on" : "")}>신규 {counts.신규}</div>
+          <button className="clearAllBtn" onClick={clearAll}>전체 비우기</button>
+        </div>
       </header>
 
       <div className="tabs">
@@ -231,6 +246,8 @@ const CSS = `
 .sub { font-size: 12px; color: var(--soft); margin-top: 2px; }
 .newpill { font-size: 13px; font-weight: 800; color: var(--soft); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; }
 .newpill.on { color: #fff; background: var(--new); border-color: var(--new); animation: pulse 1.6s infinite; }
+.hdrRight { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+.clearAllBtn { font-size:11px; color:var(--soft); background:none; border:1px solid var(--line); border-radius:8px; padding:5px 9px; cursor:pointer; font-family:inherit; }
 @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(180,73,58,0.4) } 50% { box-shadow: 0 0 0 7px rgba(180,73,58,0) } }
 .tabs { display: flex; gap: 7px; padding: 14px 16px 6px; position: sticky; top: 64px; background: var(--bg); z-index: 9; }
 .tab { flex: 1; padding: 9px 4px; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; font-size: 12.5px; font-weight: 700; color: var(--soft); cursor: pointer; font-family: inherit; }
