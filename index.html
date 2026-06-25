@@ -151,10 +151,11 @@ const STEP_LABEL = {
   "준비완료": { ko: "수령", en: "Ready", zh: "可取", ja: "受取" },
 };
 const STATUS_MSG = {
-  "신규":   { ko: "주문이 접수됐어요. 카운터에서 결제해 주세요.", en: "Order received. Please pay at the counter.", zh: "订单已接收，请到柜台付款。", ja: "注文を受け付けました。カウンターでお支払いください。" },
-  "계산완료": { ko: "계산이 완료됐어요. 잠시만 기다려 주세요.", en: "Payment confirmed. Please wait a moment.", zh: "已确认付款，请稍候。", ja: "お支払いを確認しました。少々お待ちください。" },
+  "신규":   { ko: "카운터에서 결제를 완료해주세요.", en: "Please complete payment at the counter.", zh: "请到柜台完成付款。", ja: "カウンターでお支払いをお願いします。" },
+  "계산완료": { ko: "맛있는 쿠키를 포장중입니다.", en: "Packing your delicious cookies.", zh: "正在为您打包美味的饼干。", ja: "おいしいクッキーを準備中です。" },
   "준비완료": { ko: "준비완료! 카운터에서 받아가세요.", en: "Ready! Please pick up at the counter.", zh: "已准备好！请到柜台领取。", ja: "準備完了！カウンターでお受け取りください。" },
 };
+const KEEP_OPEN = { ko: "이 화면을 켜둔 채 잠시만 기다려 주세요.", en: "Please keep this screen open and wait.", zh: "请保持此页面打开，稍候片刻。", ja: "この画面を開いたまま少々お待ちください。" };
 
 const won = (n) => n.toLocaleString("ko-KR") + "원";
 const byId = (id) => OPTIONS.find((o) => o.id === id);
@@ -354,7 +355,7 @@ function App() {
 
       {/* 4) 완료 — 주문번호 */}
       {view === "done" && orderNo && (
-        <Sheet title={tr.doneTitle} onClose={reset}>
+        <Sheet title={tr.doneTitle} hideClose={status !== "준비완료"} onClose={status === "준비완료" ? reset : () => {}}>
           <div className={"statusBig s-" + status}>
             <div className="bigNoLabel">{tr.orderNo}</div>
             <div className="bigNo">{orderNo}</div>
@@ -373,8 +374,9 @@ function App() {
             })}
           </div>
           <p className={"doneMsg" + (status === "준비완료" ? " ready" : "")}>{L(STATUS_MSG[status], lang)}</p>
-          <button className="cta" onClick={reset}>{tr.newOrder}</button>
-          <div className="hint">{tr.sentNote}</div>
+          {status === "준비완료"
+            ? <button className="cta" onClick={reset}>{tr.newOrder}</button>
+            : <div className="hint">{L(KEEP_OPEN, lang)}</div>}
         </Sheet>
       )}
 
@@ -461,13 +463,13 @@ function Thumb({ base, emoji, imgClass, emojiClass }) {
   return <img className={imgClass} src={base + exts[i]} alt="" loading="lazy" onError={() => setI(i + 1)} />;
 }
 
-function Sheet({ children, onClose, title }) {
+function Sheet({ children, onClose, title, hideClose }) {
   return (
     <div className="sheetOverlay" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheetGrip" />
         {title && <div className="sheetTitle">{title}</div>}
-        <button className="sheetClose" onClick={onClose} aria-label="close">✕</button>
+        {!hideClose && <button className="sheetClose" onClick={onClose} aria-label="close">✕</button>}
         {children}
       </div>
     </div>
