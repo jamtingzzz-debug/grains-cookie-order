@@ -156,6 +156,10 @@ const STATUS_MSG = {
   "준비완료": { ko: "준비완료! 카운터에서 받아가세요.", en: "Ready! Please pick up at the counter.", zh: "已准备好！请到柜台领取。", ja: "準備完了！カウンターでお受け取りください。" },
 };
 const KEEP_OPEN = { ko: "이 화면을 켜둔 채 잠시만 기다려 주세요.", en: "Please keep this screen open and wait.", zh: "请保持此页面打开，稍候片刻。", ja: "この画面を開いたまま少々お待ちください。" };
+const CANCEL_LABEL = { ko: "주문 취소", en: "Cancel order", zh: "取消订单", ja: "注文をキャンセル" };
+const EDIT_LABEL = { ko: "쿠키 수정", en: "Edit cookies", zh: "修改饼干", ja: "クッキーを変更" };
+const CANCELLED_MSG = { ko: "주문이 취소되었습니다.", en: "Your order has been cancelled.", zh: "您的订单已取消。", ja: "ご注文はキャンセルされました。" };
+const CONFIRM_CANCEL = { ko: "주문을 취소할까요?", en: "Cancel this order?", zh: "要取消此订单吗？", ja: "注文をキャンセルしますか？" };
 
 const won = (n) => n.toLocaleString("ko-KR") + "원";
 const byId = (id) => OPTIONS.find((o) => o.id === id);
@@ -172,6 +176,7 @@ function App() {
   const [orderKey, setOrderKey] = useState(null);
   const [status, setStatus] = useState("신규");
   const audioRef = useRef(null);
+  const selfCancelRef = useRef(false);
   const tr = T[lang];
 
   const cap = pkg ? pkg.cap : 0;
@@ -217,17 +222,22 @@ function App() {
   useEffect(() => {
     if (!orderKey) return;
     const db = window.__db; if (!db) return;
-    const ref = db.ref("orders/" + orderKey + "/status");
+    const ref = db.ref("orders/" + orderKey);
     let prev = "신규";
     const cb = ref.on("value", (snap) => {
-      const st = snap.val();
-      if (!st) return;
-      if (st !== prev) { setStatus(st); if (st !== "신규") notify(st); prev = st; }
+      const data = snap.val();
+      if (!data) {
+        if (!selfCancelRef.current && prev !== "준비완료") { setStatus("취소"); notify("취소"); }
+        return;
+      }
+      const st = data.status;
+      if (st && st !== prev) { setStatus(st); if (st !== "신규") notify(st); prev = st; }
     });
     return () => ref.off("value", cb);
   }, [orderKey]);
 
   const submit = async () => {
+    selfCancelRef.current = false;
     // 소리 잠금 해제 (손님 탭 = 사용자 동작)
     try { audioRef.current = audioRef.current || new (window.AudioContext || window.webkitAudioContext)(); audioRef.current.resume(); } catch (e) {}
     let no, key = null;
@@ -250,7 +260,19 @@ function App() {
     setStatus("신규");
     setView("done");
   };
-  const reset = () => { setView("select"); setPkg(null); setPicks([]); setOrderNo(null); setOrderKey(null); setStatus("신규"); };
+  const reset = () => { setView("select"); setPkg(null); setPicks([]); setOrderNo(null); setOrderKey(null); setStatus("신규"); selfCancelRef.current = false; };
+  const cancelOrder = async () => {
+    if (!window.confirm(L(CONFIRM_CANCEL, lang))) return;
+    selfCancelRef.current = true;
+    try { if (orderKey) await window.__db.ref("orders/" + orderKey).remove(); } catch (e) {}
+    reset();
+  };
+  const editOrder = async () => {
+    selfCancelRef.current = true;
+    try { if (orderKey) await window.__db.ref("orders/" + orderKey).remove(); } catch (e) {}
+    setOrderNo(null); setOrderKey(null); setStatus("신규");
+    setView("build");
+  };
 
   return (
     <div className="wrap">
@@ -355,28 +377,48 @@ function App() {
 
       {/* 4) 완료 — 주문번호 */}
       {view === "done" && orderNo && (
-        <Sheet title={tr.doneTitle} hideClose={status !== "준비완료"} onClose={status === "준비완료" ? reset : () => {}}>
-          <div className={"statusBig s-" + status}>
-            <div className="bigNoLabel">{tr.orderNo}</div>
-            <div className="bigNo">{orderNo}</div>
-          </div>
-          <div className="tracker">
-            {STEPS.map((st, i) => {
-              const idx = STEPS.indexOf(status);
-              const active = idx >= i;
-              const current = status === st;
-              return (
-                <div key={st} className={"tstep" + (active ? " on" : "") + (current ? " cur" : "")}>
-                  <div className="tdot">{active ? "✓" : i + 1}</div>
-                  <div className="tlabel">{L(STEP_LABEL[st], lang)}</div>
-                </div>
-              );
-            })}
-          </div>
-          <p className={"doneMsg" + (status === "준비완료" ? " ready" : "")}>{L(STATUS_MSG[status], lang)}</p>
-          {status === "준비완료"
-            ? <button className="cta" onClick={reset}>{tr.newOrder}</button>
-            : <div className="hint">{L(KEEP_OPEN, lang)}</div>}
+        <Sheet title={status === "취소" ? "" : tr.doneTitle} hideClose={status !== "준비완료" && status !== "취소"} onClose={(status === "준비완료" || status === "취소") ? reset : () => {}}>
+          {status === "취소" ? (
+            <>
+              <div className="cancelIcon">✕</div>
+              <p className="cancelledMsg">{L(CANCELLED_MSG, lang)}</p>
+              <button className="cta" onClick={reset}>{tr.newOrder}</button>
+            </>
+          ) : (
+            <>
+              <div className={"statusBig s-" + status}>
+                <div className="bigNoLabel">{tr.orderNo}</div>
+                <div className="bigNo">{orderNo}</div>
+              </div>
+              <div className="tracker">
+                {STEPS.map((st, i) => {
+                  const idx = STEPS.indexOf(status);
+                  const active = idx >= i;
+                  const current = status === st;
+                  return (
+                    <div key={st} className={"tstep" + (active ? " on" : "") + (current ? " cur" : "")}>
+                      <div className="tdot">{active ? "✓" : i + 1}</div>
+                      <div className="tlabel">{L(STEP_LABEL[st], lang)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className={"doneMsg" + (status === "준비완료" ? " ready" : "")}>{L(STATUS_MSG[status], lang)}</p>
+              {status === "준비완료" ? (
+                <button className="cta" onClick={reset}>{tr.newOrder}</button>
+              ) : status === "신규" ? (
+                <>
+                  <div className="hint">{L(KEEP_OPEN, lang)}</div>
+                  <div className="cancelRow">
+                    <button className="editBtn" onClick={editOrder}>{L(EDIT_LABEL, lang)}</button>
+                    <button className="cancelBtnC" onClick={cancelOrder}>{L(CANCEL_LABEL, lang)}</button>
+                  </div>
+                </>
+              ) : (
+                <div className="hint">{L(KEEP_OPEN, lang)}</div>
+              )}
+            </>
+          )}
         </Sheet>
       )}
 
@@ -606,6 +648,11 @@ const CSS = `
 .tstep.on .tlabel { color:var(--ink); }
 @keyframes tpulse { 0%,100%{ box-shadow:0 0 0 0 rgba(194,162,78,0.5);} 50%{ box-shadow:0 0 0 8px rgba(194,162,78,0);} }
 .doneMsg.ready { color:#2F7D4F; font-weight:800; font-size:17px; }
+.cancelIcon { width:56px; height:56px; margin:10px auto 14px; background:#B4493A; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:28px; }
+.cancelledMsg { text-align:center; font-size:17px; font-weight:800; color:#B4493A; margin-bottom:16px; }
+.cancelRow { display:flex; gap:8px; margin-top:12px; }
+.editBtn { flex:1; padding:13px; border:1px solid var(--line); background:#fff; color:var(--primary); border-radius:12px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit; }
+.cancelBtnC { flex:1; padding:13px; border:1px solid #E6CFC9; background:#FBF1EF; color:#9A3A2B; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit; }
 `;
 
 

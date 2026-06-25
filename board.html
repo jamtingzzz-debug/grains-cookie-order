@@ -134,6 +134,7 @@ function App() {
   };
   const advance = (key, status) => { window.__db.ref("orders/" + key + "/status").set(STATUS_NEXT[status]); };
   const clear = (key) => { window.__db.ref("orders/" + key).remove(); };
+  const cancelOrder = (key) => { if (window.confirm("이 주문을 취소할까요? 손님 화면에 취소 알림이 갑니다.")) clear(key); };
 
   const counts = useMemo(() => {
     const c = { 진행중: 0, 신규: 0, 계산완료: 0, 준비완료: 0 };
@@ -196,7 +197,10 @@ function App() {
 
               <div className="oFoot">
                 {STATUS_NEXT[o.status] ? (
-                  <button className="adv" onClick={() => advance(o.key, o.status)}>{NEXT_LABEL[o.status]}</button>
+                  <>
+                    <button className="adv" onClick={() => advance(o.key, o.status)}>{NEXT_LABEL[o.status]}</button>
+                    <button className="cancelBtn" onClick={() => cancelOrder(o.key)}>주문 취소</button>
+                  </>
                 ) : (
                   <button className="clearBtn" onClick={() => clear(o.key)}>수령 완료 · 지우기</button>
                 )}
@@ -252,7 +256,8 @@ const CSS = `
 .oItems { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .iTag { font-size: 12.5px; background: #F3ECDF; border-radius: 8px; padding: 5px 9px; font-weight: 600; }
 .oMemo { margin: 8px 0; padding: 9px 11px; background: #FBEEE9; border-radius: 10px; font-size: 13px; font-weight: 600; color: #9A3A2B; }
-.oFoot { margin-top: 10px; }
+.oFoot { margin-top: 10px; display:flex; flex-direction:column; gap:7px; }
+.cancelBtn { width:100%; border:1px solid #E6CFC9; background:#FBF1EF; color:#9A3A2B; font-size:12.5px; font-weight:700; padding:9px; border-radius:10px; cursor:pointer; font-family:inherit; }
 .adv { width: 100%; border: none; background: var(--primary); color: #fff; font-size: 14px; font-weight: 800; padding: 13px; border-radius: 12px; cursor: pointer; font-family: inherit; }
 .clearBtn { width: 100%; border: 1px solid var(--line); background: var(--bg); color: var(--soft); font-size: 13.5px; font-weight: 700; padding: 12px; border-radius: 12px; cursor: pointer; font-family: inherit; }
 .testBtn { position: fixed; left: 50%; transform: translateX(-50%); bottom: 40px; width: min(408px, calc(100% - 32px)); z-index: 30; padding: 15px; background: var(--ink); color: #fff; border: none; border-radius: 14px; font-size: 14.5px; font-weight: 700; cursor: pointer; font-family: inherit; box-shadow: 0 8px 22px rgba(0,0,0,0.2); }
